@@ -14,6 +14,18 @@ object UserService {
 
   val service: HttpService[IO] = HttpService[IO] {
 
+    case GET -> Root / username =>
+      UserRepository.findByUsername(username).flatMap {
+        case Some(user) => Ok(user)
+        case None => NotFound(s"No user found: $username".asJson)
+      }
+
+    case GET -> Root =>
+      UserRepository.findAll().flatMap {
+        case userlist => Ok(userlist)
+        case Nil => NotFound(s"No user found: ".asJson)
+      }
+
     case req @ POST -> Root => for {
       createUser <- req.as[CreateUserRequest]
       userOption <- UserRepository.addUser(createUser.name, createUser.email)

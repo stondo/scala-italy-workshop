@@ -11,7 +11,7 @@ import org.typelevel.workshop.repository.ProjectRepository
 
 object ProjectService {
 
-  case class UpdateNameAndDescProject(id: Int, name: String, description: String)
+  case class ProjectWithoutOwner(id: Int, name: String, description: String)
 
   val service: HttpService[IO] = HttpService[IO] {
 
@@ -23,17 +23,16 @@ object ProjectService {
 
     case GET -> Root =>
       ProjectRepository.findAll().flatMap {
-        case list => println(list); Ok(list)
+        case h::Nil => Ok(h)
+        case h::t => Ok(h::t)
         case Nil => NotFound(s"No project found: ".asJson)
       }
 
     case req @ PUT -> Root => for {
-      updateNameDesc <- req.as[UpdateNameAndDescProject]
-      projectOption <- ProjectRepository.updateNameAndDesc(updateNameDesc.id, updateNameDesc.name, updateNameDesc.description)
-      result <- projectOption match {
-        case affectedRows => Created(affectedRows)
-        case -1 => BadRequest("Project can't be updated".asJson)
-      }
+      updateNameDesc <- req.as[ProjectWithoutOwner]
+      affectedRows <- ProjectRepository.updateNameAndDesc(updateNameDesc.id, updateNameDesc.name, updateNameDesc.description)
+      result <- if (affectedRows > 0) Created(affectedRows)
+                else BadRequest("Error updating project".asJson)
     } yield result
 
     case req @ DELETE -> Root / name =>
