@@ -13,6 +13,8 @@ object ProjectService {
 
   case class ProjectWithoutOwner(id: Int, name: String, description: String)
 
+  case class CreateProjectRequest(name: String, description: String, ownerId: Int)
+
   val service: HttpService[IO] = HttpService[IO] {
 
     case GET -> Root / name =>
@@ -28,14 +30,30 @@ object ProjectService {
         case Nil => NotFound(s"No project found: ".asJson)
       }
 
+    case GET -> Root / "byuser" /userId =>
+      ProjectRepository.findAllByUser(userId.toInt).flatMap {
+        case h::Nil => Ok(h)
+        case h::t => Ok(h::t)
+        case Nil => NotFound(s"No project found: $userId".asJson)
+      }
+
+    case req @ POST -> Root => for {
+      createProjectReq <- req.as[CreateProjectRequest]
+      projectOption <- ProjectRepository.addProject(createProjectReq.name, createProjectReq.description, createProjectReq.ownerId)
+      result <- projectOption match {
+        case Some(project) => Created(project)
+        case None => BadRequest("Project already exists or wrong owner id".asJson)
+      }
+    } yield result
+
     case req @ PUT -> Root => for {
       updateNameDesc <- req.as[ProjectWithoutOwner]
-      affectedRows <- ProjectRepository.updateNameAndDesc(updateNameDesc.id, updateNameDesc.name, updateNameDesc.description)
+      affectedRows <- ProjectRepository.updateProject(updateNameDesc.id, updateNameDesc.name, updateNameDesc.description)
       result <- if (affectedRows > 0) Created(affectedRows)
                 else BadRequest("Error updating project".asJson)
     } yield result
 
-    case req @ DELETE -> Root / name =>
+    case _ @ DELETE -> Root / name =>
       ProjectRepository.deleteProject(name).flatMap(_ => NoContent())
 
   }
